@@ -125,9 +125,21 @@ configurable, as required.
 
 ### Deploying the admin page
 
-Same Pages deploy as the main frontend — `admin.html` sits next to
-`index.html`. Set `window.NIDHI_API_BASE` in `admin.html` the same way as in
-`index.html`. Visit `https://your-pages-site/admin.html` to log in.
+The admin page is **not** at a guessable path like `/admin` — it lives in a
+randomly-named folder under `frontend/` (check the folder list in this repo;
+it's the 24-hex-character one) and is served with `X-Robots-Tag: noindex`
+and `Cache-Control: no-store` via `frontend/_headers`. Same Pages deploy as
+the main frontend either way. Set `window.NIDHI_API_BASE` inside its
+`index.html` the same way as in `index.html`.
+
+**This only works if the repo is private.** A folder name is not a secret
+once it's committed to a public GitHub repo — anyone can read it in source
+control regardless of how random it looks. The real protection is always
+the password + session auth on the API (`requireAdmin` in
+`worker/src/auth.js`); the obscure path is a second layer against casual
+discovery/bots, not a substitute. To rotate the path: rename the folder,
+update the redeploy, and the old path 404s immediately (no redirect left
+behind).
 
 ## Environment variables / config
 

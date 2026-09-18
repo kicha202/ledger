@@ -3,35 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
 <title>Nidhi Ledger · Super Admin</title>
 <style>
   :root{ --paper:#F7F1E4; --paper-line:#E3D6BC; --ink:#2B2118; --ink-soft:#5B4F41;
     --maroon:#7A1E3A; --maroon-dark:#5A1329; --gold:#A9791F; --green:#2F6B4F; --red:#A33B2B; --card:#FFFDF8; }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,sans-serif;min-height:100vh;}
-  header{background:linear-gradient(135deg,var(--maroon),var(--maroon-dark));color:#F7F1E4;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;}
-  header h1{font-size:18px;margin:0;}
+  header{background:linear-gradient(135deg,var(--maroon),var(--maroon-dark));color:#F7F1E4;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+  header h1{font-size:16px;margin:0;word-break:break-word;}
   .btn{background:var(--maroon);color:#fff;border:none;padding:9px 16px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;}
   .btn:hover{background:var(--maroon-dark);}
   .btn.secondary{background:#fff;color:var(--maroon);border:1.5px solid var(--maroon);}
   .btn.danger{background:var(--red);}
   .btn.small{padding:5px 10px;font-size:12px;}
-  main{max-width:1000px;margin:0 auto;padding:20px 14px 60px;}
-  .card{background:var(--card);border:1px solid var(--paper-line);border-radius:10px;padding:16px;margin-bottom:16px;}
-  .card h2{font-size:16px;margin:0 0 12px;color:var(--maroon);border-bottom:2px solid var(--paper-line);padding-bottom:8px;}
+  main{max-width:1000px;margin:0 auto;padding:16px 12px 60px;}
+  .card{background:var(--card);border:1px solid var(--paper-line);border-radius:10px;padding:14px;margin-bottom:16px;}
+  .card h2{font-size:15px;margin:0 0 12px;color:var(--maroon);border-bottom:2px solid var(--paper-line);padding-bottom:8px;}
   label{font-size:12.5px;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:4px;}
   input,select{width:100%;padding:9px 10px;border:1px solid var(--paper-line);border-radius:6px;font-size:14px;background:#fff;color:var(--ink);}
   .field{margin-bottom:10px;}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  table{width:100%;border-collapse:collapse;font-size:13px;}
+  @media (max-width:640px){ .grid{grid-template-columns:1fr;} main{padding:12px 8px 50px;} }
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px;}
   th,td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--paper-line);}
   th{color:var(--ink-soft);font-size:11px;text-transform:uppercase;}
-  nav{display:flex;gap:2px;background:var(--maroon-dark);padding:0 8px;overflow-x:auto;}
-  nav button{background:none;border:none;color:#EEDFC3;padding:12px 14px;font-size:13px;font-weight:600;cursor:pointer;opacity:.75;border-bottom:3px solid transparent;}
+  nav{display:flex;gap:2px;background:var(--maroon-dark);padding:0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  nav button{background:none;border:none;color:#EEDFC3;padding:12px 12px;font-size:13px;font-weight:600;cursor:pointer;opacity:.75;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;}
   nav button.active{opacity:1;border-bottom-color:var(--gold);color:#fff;}
   .error{color:var(--red);font-size:13px;margin-top:8px;}
-  .row-actions{display:flex;gap:6px;}
-  #loginScreen{max-width:360px;margin:80px auto;}
+  .row-actions{display:flex;gap:6px;flex-wrap:wrap;}
+  #loginScreen{max-width:360px;width:calc(100% - 24px);margin:60px auto;}
   .hidden{display:none;}
 </style>
 </head>
@@ -170,7 +173,7 @@ function renderMembers(){
       <div class="field"><label>Registration Fee (₹)</label><input id="m_fee" type="number" value="0"></div>
     </div>
     <button class="btn" onclick="addMember()">Add Member</button></div>
-    <div class="card"><h2>Members</h2><table><tr><th>Name</th><th>Phone</th><th>Joined</th><th>Status</th><th></th></tr>${rows}</table></div>`;
+    <div class="card"><h2>Members</h2><div class="table-wrap"><table><tr><th>Name</th><th>Phone</th><th>Joined</th><th>Status</th><th></th></tr>${rows}</table></div></div>`;
 }
 async function addMember(){
   const name = document.getElementById('m_name').value.trim();
@@ -202,7 +205,7 @@ function renderSubs(){
       <div class="field"><label>Date</label><input id="sub_date" type="date"></div>
     </div>
     <button class="btn" onclick="addSub()">Record</button></div>
-    <div class="card"><h2>Subscription History</h2><table><tr><th>Member</th><th>Month</th><th>Amount</th><th>Date</th><th></th></tr>${rows}</table></div>`;
+    <div class="card"><h2>Subscription History</h2><div class="table-wrap"><table><tr><th>Member</th><th>Month</th><th>Amount</th><th>Date</th><th></th></tr>${rows}</table></div></div>`;
 }
 async function addSub(){
   const memberId = document.getElementById('sub_member').value;
@@ -230,7 +233,7 @@ function renderLoans(){
       <div class="field"><label>Issue Date</label><input id="l_date" type="date"></div>
     </div>
     <button class="btn" onclick="addLoan()">Issue Loan</button></div>
-    <div class="card"><h2>Loans</h2><table><tr><th>Member</th><th>Amount</th><th>Rate</th><th>Installments</th><th>Issued</th><th></th></tr>${rows}</table></div>`;
+    <div class="card"><h2>Loans</h2><div class="table-wrap"><table><tr><th>Member</th><th>Amount</th><th>Rate</th><th>Installments</th><th>Issued</th><th></th></tr>${rows}</table></div></div>`;
 }
 async function addLoan(){
   const memberId = document.getElementById('l_member').value;
@@ -262,7 +265,7 @@ function renderTxns(){
       <div class="field"><label>Note</label><input id="t_note"></div>
     </div>
     <button class="btn" onclick="addTxn()">Add Entry</button></div>
-    <div class="card"><h2>Transaction History</h2><table><tr><th>Type</th><th>Amount</th><th>Category</th><th>Date</th><th>Source</th><th></th></tr>${rows}</table></div>`;
+    <div class="card"><h2>Transaction History</h2><div class="table-wrap"><table><tr><th>Type</th><th>Amount</th><th>Category</th><th>Date</th><th>Source</th><th></th></tr>${rows}</table></div></div>`;
 }
 async function addTxn(){
   const body = { id: uid(), type: document.getElementById('t_type').value,
@@ -278,7 +281,7 @@ function renderCycles(){
   const rows = DATA.cycles.map(cy => `<tr><td>#${cy.number}</td><td>${cy.resetDate}</td><td>${fmt(cy.interestDistributed)}</td>
     <td>${fmt(cy.perMemberShare)}</td><td>${cy.memberCount}</td></tr>`).join('') || '<tr><td colspan="5">No cycles closed yet</td></tr>';
   return `<div class="card"><h2>Interest Distribution Cycles</h2>
-    <table><tr><th>Cycle</th><th>Closed</th><th>Interest Distributed</th><th>Per Member</th><th>Members</th></tr>${rows}</table></div>`;
+    <div class="table-wrap"><table><tr><th>Cycle</th><th>Closed</th><th>Interest Distributed</th><th>Per Member</th><th>Members</th></tr>${rows}</table></div></div>`;
 }
 
 checkSession();
