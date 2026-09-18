@@ -1,0 +1,22 @@
+{
+  "name": "nidhi-ledger-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "hash-password": "node scripts/hash-password.js",
+    "db:init:local": "wrangler d1 execute nidhi_ledger --local --file=./schema.sql",
+    "db:init:remote": "wrangler d1 execute nidhi_ledger --remote --file=./schema.sql"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0",
+    "vitest": "^2.1.0",
+    "@cloudflare/vitest-pool-workers": "^0.5.0"
+  }
+}

@@ -1,0 +1,14 @@
+name = "nidhi-ledger-api"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# CORS-allowed origin(s) for the Pages frontend. Comma-separated for multiple.
+# Set via `wrangler secret put ALLOWED_ORIGIN` in production, or edit [vars] below for quick local testing.
+[vars]
+ALLOWED_ORIGIN = "*"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nidhi_ledger"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
