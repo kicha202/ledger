@@ -6,9 +6,9 @@ compatibility_flags = ["nodejs_compat"]
 # CORS-allowed origin(s) for the Pages frontend. Comma-separated for multiple.
 # Set via `wrangler secret put ALLOWED_ORIGIN` in production, or edit [vars] below for quick local testing.
 [vars]
-ALLOWED_ORIGIN = "*"
+ALLOWED_ORIGIN = "https://nidhi-ledger.kkishore170305.workers.dev"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "nidhi_ledger"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "3357a626-0f08-4ad2-aa6a-51a34c7c81a6"

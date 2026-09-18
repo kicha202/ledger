@@ -2,3 +2,10 @@ worker/node_modules/
 worker/.wrangler/
 worker/.dev.vars
 .DS_Store
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
