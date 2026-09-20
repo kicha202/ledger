@@ -305,3 +305,58 @@ Bugs this test pass caught and fixed while building the admin layer:
    NULL = not locked`) broke naive statement-splitting (used by the test
    setup, and would break any simple SQL migration runner). Fixed by
    rewording the comment.
+
+## Security testing
+
+`worker/test/security.test.js` is an adversarial suite (54 tests) that tries
+to actually break the API, not just exercise the happy path: JWT forgery
+(wrong secret, `alg:none`, tampered payload, expired token, wrong role),
+missing/garbage session cookies, SQL injection payloads in both body fields
+and URL path parameters, CSRF (missing header), malformed/wrong-shape input,
+duplicate keys, orphaned foreign keys, and response hardening (security
+headers, CORS-with-credentials misconfiguration, cookie flags). Combined with
+`api.test.js`, **66 tests pass**. Run with `npm test` in `worker/`.
+
+**What this found and fixed** (not hypothetical — each of these failed a
+real test before the fix):
+
+1. **Stored XSS, unpatched until now.** Every render function builds HTML by
+   string interpolation and assigns it via `innerHTML`, with zero escaping
+   anywhere in the original 2500-line app. A member name, phone number,
+   nominee, transaction category/note, or organisation name containing
+   `<img src=x onerror=...>` would execute as script for anyone viewing that
+   data — including through a restored backup file, so this was also a
+   stored-XSS-via-import vector. Fixed: an `esc()` helper (HTML-entity
+   escaping) added at every user-controlled interpolation site — 29 call
+   sites in `app.js` — verified in a real browser that the payload renders
+   as inert text on both the public page and the admin page, not executed.
+   `memberName()` intentionally stays unescaped for Excel export, where
+   entities would corrupt spreadsheet cells; `escName()` is the
+   HTML-safe wrapper used everywhere in markup instead.
+2. **Every constraint violation returned an opaque HTTP 500** — duplicate
+   IDs, an invalid transaction type, a loan referencing a non-existent
+   member, wrong-shaped JSON. A single bad row anywhere in an imported
+   backup would fail the whole save with no indication of what was wrong.
+   Fixed: a global error handler maps SQLite constraint violations to
+   specific 4xx responses, and `PUT /api/state` now validates array/object
+   shape and checks for duplicate/missing ids before touching the database.
+3. **CORS could hand out a wildcard-plus-credentials grant** if
+   `ALLOWED_ORIGIN` was ever left at its `*` default — the classic
+   misconfiguration that lets any website read an authenticated response.
+   Fixed: credentials are only enabled when `ALLOWED_ORIGIN` is a real,
+   non-wildcard origin — a careless deploy now breaks admin login loudly
+   instead of silently exposing it.
+
+**What was already solid** (tested, not just assumed): JWT signature
+verification rejects every forgery attempt tried, D1's prepared statements
+(`.bind()`) made every SQL injection payload land as inert stored data, CSRF
+header enforcement holds, brute-force lockout works, security response
+headers are present, and session cookies carry `HttpOnly`/`Secure`/`SameSite=Strict`.
+
+**What this does not cover** — said plainly, not to minimize it: this is API-
+and storage-layer testing. It does not include a dependency/CVE scan of the
+CDN-hosted libraries (`xlsx`, `jspdf`, `html2canvas`), a load/DoS test, or a
+review of Cloudflare's own platform security. "Tested against a real
+adversarial suite covering the known common attack classes" is an accurate
+description of what was done here — "secured from every cyber attack" is not
+a claim any test suite can support, and I'm not making it.

@@ -7,18 +7,53 @@ import {
 
 const app = new Hono();
 
-// BUG FIX: origin:'*' cannot be paired with credentialed (cookie-based) requests
-// per the CORS spec — browsers reject it. The admin panel needs cookies sent
-// cross-origin (Pages domain -> Workers domain), so ALLOWED_ORIGIN must be an
-// exact origin, and credentials must be enabled.
+// origin:'*' cannot be paired with credentialed (cookie-based) requests per the
+// CORS spec — browsers reject it. The admin panel needs cookies sent cross-origin
+// (Pages domain -> Workers domain), so ALLOWED_ORIGIN must be an exact origin.
+//
+// If it is left at '*' (or unset), we deliberately do NOT grant credentials:
+// a wildcard that also carries Access-Control-Allow-Credentials is the classic
+// misconfiguration that lets any site read an authenticated response. Failing
+// closed here means a careless deploy breaks admin login loudly instead of
+// silently exposing it.
 app.use('*', async (c, next) => {
+  const configured = (c.env.ALLOWED_ORIGIN || '').trim();
+  const allowList = configured.split(',').map(s => s.trim()).filter(Boolean);
+  const isWildcard = allowList.length === 0 || allowList.includes('*');
+
   const mw = cors({
-    origin: c.env.ALLOWED_ORIGIN || '*',
+    origin: isWildcard ? '*' : (origin) => (allowList.includes(origin) ? origin : allowList[0]),
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'X-Admin-Request'],
-    credentials: true,
+    credentials: !isWildcard,
   });
   return mw(c, next);
+});
+
+// Turns expected database rejections into actionable 4xx responses.
+// Without this, any constraint violation (duplicate id, missing foreign key,
+// bad enum value) surfaces as an opaque 500 — which also means one bad row in
+// an imported backup fails the whole save with no indication of what was wrong.
+app.onError((err, c) => {
+  const msg = String((err && err.message) || '');
+  if (/UNIQUE constraint failed/i.test(msg)) {
+    return c.json({ error: 'A record with that id already exists.' }, 409);
+  }
+  if (/FOREIGN KEY constraint failed/i.test(msg)) {
+    return c.json({ error: 'Referenced record does not exist.' }, 400);
+  }
+  if (/CHECK constraint failed/i.test(msg)) {
+    return c.json({ error: 'A field contains a value that is not allowed.' }, 400);
+  }
+  if (/NOT NULL constraint failed/i.test(msg)) {
+    return c.json({ error: 'A required field is missing.' }, 400);
+  }
+  if (/SQLITE_CONSTRAINT/i.test(msg)) {
+    return c.json({ error: 'The data violates a database constraint.' }, 400);
+  }
+  // Genuinely unexpected: log for the operator, tell the caller nothing useful.
+  console.error('unhandled error:', msg);
+  return c.json({ error: 'Internal error' }, 500);
 });
 
 // Baseline security headers on every response.
@@ -208,6 +243,7 @@ app.get('/api/transactions', async (c) => {
 app.post('/api/transactions', async (c) => {
   const b = await c.req.json();
   if (!b.id || !b.type || b.amount == null) return bad(c, 'id, type, amount required');
+  if (b.type !== 'income' && b.type !== 'expense') return bad(c, "type must be 'income' or 'expense'");
   await c.env.DB.prepare(
     `INSERT INTO transactions (id,type,amount,category,date,note,auto,source_type,loan_id,member_id)
      VALUES (?,?,?,?,?,?,?,?,?,?)`
@@ -283,7 +319,19 @@ app.get('/api/state', async (c) => {
 // like exit settlement, final closure, and cycle reset) is written consistently.
 app.put('/api/state', async (c) => {
   const db = c.env.DB;
-  const s = await c.req.json();
+  let s;
+  try { s = await c.req.json(); } catch { return bad(c, 'Invalid JSON body'); }
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return bad(c, 'Body must be a state object');
+
+  // Validate shape up front: without this, a string where an array belongs gets
+  // iterated character by character and produces a wall of constraint errors.
+  for (const key of ['members', 'subs', 'loans', 'loanPayments', 'transactions', 'cycles']) {
+    if (s[key] != null && !Array.isArray(s[key])) return bad(c, `"${key}" must be an array`);
+  }
+  if (s.settings != null && (typeof s.settings !== 'object' || Array.isArray(s.settings))) {
+    return bad(c, '"settings" must be an object');
+  }
+
   const members = s.members || [];
   const subs = s.subs || [];
   const loans = s.loans || [];
@@ -291,6 +339,17 @@ app.put('/api/state', async (c) => {
   const txns = s.transactions || [];
   const cycles = s.cycles || [];
   const settings = s.settings || {};
+
+  // Duplicate ids inside one payload would abort the batch mid-write; catch it
+  // here so the caller gets told which collection is at fault.
+  for (const [label, rows] of [['members', members], ['subs', subs], ['loans', loans], ['loanPayments', payments], ['transactions', txns]]) {
+    const ids = rows.map(r => r && r.id);
+    if (new Set(ids).size !== ids.length) return bad(c, `Duplicate id found in "${label}"`);
+    if (ids.some(id => !id)) return bad(c, `Every row in "${label}" needs an id`);
+  }
+  if (txns.some(x => x.type !== 'income' && x.type !== 'expense')) {
+    return bad(c, "Every transaction type must be 'income' or 'expense'");
+  }
 
   const stmts = [
     db.prepare('DELETE FROM loan_payments'),

@@ -262,6 +262,24 @@ let uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 // Left as '' during local dev with `wrangler dev` served on the same origin as this page.
 const API_BASE = window.NIDHI_API_BASE || '';
 
+// Escapes text before it goes into an HTML string. Every render function below
+// builds markup by interpolation and assigns it with innerHTML, so any field a
+// person can type into (names, phone, address, nominee, category, note) must
+// pass through here — otherwise a value like <img src=x onerror=...> becomes
+// executable script for whoever views the page, including a restored backup file.
+// Not for data leaving as a file: Excel/CSV want the raw text, not entities.
+function esc(value){
+  if(value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// HTML-safe member name. memberName() stays raw for spreadsheet export.
+function escName(id){ return esc(memberName(id)); }
+
 // Read-only mode: the public home page displays data but cannot change it.
 // The admin page loads this same file with the flag off and gets full CRUD.
 const READ_ONLY = window.NIDHI_READ_ONLY === true;
@@ -418,10 +436,11 @@ function downloadCanvasPDF(canvas, filename){
   doc.save(filename + '.pdf');
 }
 function reportHeaderHtml(title, subtitle){
+  // Callers pass the organisation name here, which is user-entered.
   return `
     <div style="text-align:center;margin-bottom:16px;">
-      <div style="font-family:'Noto Serif Tamil',serif;font-weight:700;font-size:19px;color:#7A1E3A;">${title}</div>
-      ${subtitle ? `<div style="font-size:13px;color:#5B4F41;margin-top:2px;">${subtitle}</div>` : ''}
+      <div style="font-family:'Noto Serif Tamil',serif;font-weight:700;font-size:19px;color:#7A1E3A;">${esc(title)}</div>
+      ${subtitle ? `<div style="font-size:13px;color:#5B4F41;margin-top:2px;">${esc(subtitle)}</div>` : ''}
     </div>`;
 }
 function reportTableStyle(){
@@ -622,7 +641,7 @@ async function exportSummaryJPEG(){
   wrap.style.color = '#2B2118';
   wrap.innerHTML = `
     <div style="text-align:center;margin-bottom:16px;">
-      ${orgName ? `<div style="font-family:'Noto Serif Tamil',serif;font-weight:700;font-size:22px;color:#7A1E3A;">${orgName}</div>` : ''}
+      ${orgName ? `<div style="font-family:'Noto Serif Tamil',serif;font-weight:700;font-size:22px;color:#7A1E3A;">${esc(orgName)}</div>` : ''}
       <div style="font-family:'Noto Serif Tamil',serif;font-weight:700;font-size:17px;color:#7A1E3A;margin-top:4px;">${t('summary_report_heading')}</div>
       <div style="font-size:13px;color:#5B4F41;margin-top:2px;">${t('date_label')}: ${dateStr}</div>
     </div>
@@ -718,7 +737,7 @@ function renderDashboard(){
           <input id="standardSubAmountInput" type="number" value="${standardSubAmount()}" onchange="setStandardSubAmount(this.value)">
         </div>
         <div class="field"><label>${t('org_name_label')}</label>
-          <input id="orgNameInput" type="text" value="${(state.settings&&state.settings.orgName)||''}" onchange="setOrgName(this.value)">
+          <input id="orgNameInput" type="text" value="${esc((state.settings&&state.settings.orgName)||'')}" onchange="setOrgName(this.value)">
         </div>
       </div>
       <p class="muted" style="margin-top:6px;">${LANG==='ta' ? 'இது ஒருமுறை மட்டும் தானாக அமைக்கப்படும். இதிலிருந்து இன்றைய தேதி வரை எத்தனை மாதங்கள் ஆகிறதோ, அதுவே "இது எத்தனையாவது மாதம்" எனக் காட்டப்படும் — நாட்காட்டி மாதம் மாறும்போது இது தானாக அதிகரிக்கும்.' : 'This is set automatically once. The month number below shows how many months have passed since then to today — it will automatically increase when the calendar month changes.'}</p>
@@ -788,11 +807,11 @@ function renderDashboard(){
 function renderMembers(){
   const editing = editingMemberId ? state.members.find(m=>m.id===editingMemberId) : null;
   if(!statementMemberId && state.members.length) statementMemberId = state.members[0].id;
-  const statementOptions = state.members.map(m=>`<option value="${m.id}" ${m.id===statementMemberId?'selected':''}>${m.name}${m.exited?` (${t('exited_tag')})`:''}</option>`).join('');
+  const statementOptions = state.members.map(m=>`<option value="${m.id}" ${m.id===statementMemberId?'selected':''}>${esc(m.name)}${m.exited?` (${t('exited_tag')})`:''}</option>`).join('');
   const statementHtml = renderMemberStatementBody(statementMemberId);
   const rows = state.members.map(m => `
     <tr>
-      <td>${m.name}</td><td>${m.phone||t('na')}</td><td>${m.joinDate||t('na')}</td><td>${m.nominee||t('na')}</td>
+      <td>${esc(m.name)}</td><td>${esc(m.phone)||t('na')}</td><td>${m.joinDate||t('na')}</td><td>${esc(m.nominee)||t('na')}</td>
       <td>${m.exited ? `<span class="tag due">${t('exited_tag')}</span>` : ''}</td>
       ${rw(`<td class="row-actions">
         <button class="btn small secondary" onclick="editMember('${m.id}')">${t('edit')}</button>
@@ -801,16 +820,16 @@ function renderMembers(){
       </td>`)}
     </tr>`).join('');
   const activeMembers = state.members.filter(m=>!m.exited);
-  const exitOptions = activeMembers.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  const exitOptions = activeMembers.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
   return `
     ${rw(`<div class="card">
       <h2>${editing ? t('edit_member_title') : t('reg_title')}</h2>
       <div class="grid">
-        <div class="field"><label>${t('name')}</label><input id="mName" type="text" value="${editing?editing.name:''}"></div>
-        <div class="field"><label>${t('phone')}</label><input id="mPhone" type="tel" value="${editing?(editing.phone||''):''}"></div>
-        <div class="field"><label>${t('address')}</label><input id="mAddress" type="text" value="${editing?(editing.address||''):''}"></div>
+        <div class="field"><label>${t('name')}</label><input id="mName" type="text" value="${esc(editing&&editing.name)}"></div>
+        <div class="field"><label>${t('phone')}</label><input id="mPhone" type="tel" value="${esc(editing&&editing.phone)}"></div>
+        <div class="field"><label>${t('address')}</label><input id="mAddress" type="text" value="${esc(editing&&editing.address)}"></div>
         <div class="field"><label>${t('join_date')}</label><input id="mJoin" type="date" value="${editing?(editing.joinDate||''):new Date().toISOString().slice(0,10)}"></div>
-        <div class="field"><label>${t('nominee_name')}</label><input id="mNominee" type="text" value="${editing?(editing.nominee||''):''}"></div>
+        <div class="field"><label>${t('nominee_name')}</label><input id="mNominee" type="text" value="${esc(editing&&editing.nominee)}"></div>
         <div class="field"><label>${t('reg_fee')}</label><input id="mRegFee" type="number" value="${editing?(editing.regFee||0):0}"></div>
       </div>
       <div class="row-actions">
@@ -899,18 +918,18 @@ function renderMemberStatementBody(memberId){
   statementSnapshot = data;
   if(!data) return `<div class="empty">${t('no_members')}</div>`;
   const m = data.member;
-  const subRows = data.subHistory.map(s=>`<tr><td>${s.month}</td><td style="text-align:right">${fmt(s.amount)}</td><td>${s.date}</td></tr>`).join('');
-  const loanRows = data.memberLoans.map((l,i)=>`<tr><td>${i+1}</td><td style="text-align:right">${fmt(l.amount)}</td><td style="text-align:right">${l.rate}%</td><td style="text-align:center">${l.installments}</td><td>${l.issueDate}</td><td style="text-align:right">${fmt(loanOutstanding(l))}</td></tr>`).join('');
+  const subRows = data.subHistory.map(s=>`<tr><td>${esc(s.month)}</td><td style="text-align:right">${fmt(s.amount)}</td><td>${esc(s.date)}</td></tr>`).join('');
+  const loanRows = data.memberLoans.map((l,i)=>`<tr><td>${i+1}</td><td style="text-align:right">${fmt(l.amount)}</td><td style="text-align:right">${l.rate}%</td><td style="text-align:center">${l.installments}</td><td>${esc(l.issueDate)}</td><td style="text-align:right">${fmt(loanOutstanding(l))}</td></tr>`).join('');
   const paymentRows = data.loanPaymentHistory.map(p=>{
     const loan = state.loans.find(l=>l.id===p.loanId);
-    return `<tr><td>${loan?(loan.loanNumber||data.memberLoans.indexOf(loan)+1):'-'}</td><td>${p.no}</td><td style="text-align:right">${fmt(p.amount)}</td><td>${p.date}</td><td>${p.interestWaived?t('pay_without_interest'):''}</td></tr>`;
+    return `<tr><td>${loan?(loan.loanNumber||data.memberLoans.indexOf(loan)+1):'-'}</td><td>${p.no}</td><td style="text-align:right">${fmt(p.amount)}</td><td>${esc(p.date)}</td><td>${p.interestWaived?t('pay_without_interest'):''}</td></tr>`;
   }).join('');
   return `
     <div class="divider"></div>
     <table>
-      <tr><td class="muted">${t('statement_phone')}</td><td style="font-weight:600">${m.phone||t('na')}</td></tr>
+      <tr><td class="muted">${t('statement_phone')}</td><td style="font-weight:600">${esc(m.phone)||t('na')}</td></tr>
       <tr><td class="muted">${t('statement_join')}</td><td style="font-weight:600">${m.joinDate||t('na')}</td></tr>
-      <tr><td class="muted">${t('statement_nominee')}</td><td style="font-weight:600">${m.nominee||t('na')}</td></tr>
+      <tr><td class="muted">${t('statement_nominee')}</td><td style="font-weight:600">${esc(m.nominee)||t('na')}</td></tr>
       ${m.exited ? `<tr><td class="muted">${t('statement_status')}</td><td><span class="tag due">${t('exited_tag')}</span></td></tr>` : ''}
     </table>
     <div class="divider"></div>
@@ -1014,7 +1033,7 @@ function previewFinalClosure(){
   const shareAmount = activeMembers.length ? Math.round((totalInterest/activeMembers.length)*100)/100 : 0;
   finalClosurePreview = activeMembers.map(m=>({member:m, ...computeSettlementForMember(m, date, shareAmount)}));
   const rows = finalClosurePreview.map(r=>`
-    <tr><td>${r.member.name}</td><td style="text-align:right">${fmt(r.subPaid)}</td><td style="text-align:right">${fmt(r.shareAmount)}</td>
+    <tr><td>${esc(r.member.name)}</td><td style="text-align:right">${fmt(r.subPaid)}</td><td style="text-align:right">${fmt(r.shareAmount)}</td>
     <td style="text-align:right">${fmt(r.loanOut)}</td><td style="text-align:right">${fmt(r.subOutstanding)}</td>
     <td style="text-align:right;font-weight:700">${fmt(r.settlement)}</td></tr>`).join('');
   const grandTotal = finalClosurePreview.reduce((s,r)=>s+r.settlement,0);
@@ -1040,7 +1059,7 @@ async function exportFinalClosureJPEG(){
   if(!finalClosurePreview || !finalClosurePreview.length) return;
   const rows = finalClosurePreview.map(r=>`
     <tr>
-      <td style="${reportTdStyle()}">${r.member.name}</td>
+      <td style="${reportTdStyle()}">${esc(r.member.name)}</td>
       <td style="${reportTdStyle('right')}">${fmt(r.subPaid)}</td>
       <td style="${reportTdStyle('right')}">${fmt(r.shareAmount)}</td>
       <td style="${reportTdStyle('right')}">${fmt(r.loanOut)}</td>
@@ -1200,7 +1219,7 @@ function deleteMember(id){
 }
 
 function memberOptions(selectedId){
-  return state.members.map(m=>`<option value="${m.id}" ${m.id===selectedId?'selected':''}>${m.name}</option>`).join('');
+  return state.members.map(m=>`<option value="${m.id}" ${m.id===selectedId?'selected':''}>${esc(m.name)}</option>`).join('');
 }
 function memberName(id){ const m = state.members.find(x=>x.id===id); return m ? m.name : t('na'); }
 
@@ -1235,7 +1254,7 @@ function renderSubs(){
   });
   historySheetData = historyData;
   const historyRows = historyData.map(d=>`<tr>
-      <td>${d.no}</td><td>${d.name}</td>
+      <td>${d.no}</td><td>${esc(d.name)}</td>
       <td style="text-align:right">${fmt(d.subPaid)}</td>
       <td style="text-align:right">${fmt(d.principalPaid)}</td>
       <td style="text-align:right">${fmt(d.interestPaid)}</td>
@@ -1298,7 +1317,7 @@ function renderSubs(){
   });
   const collectionSheetHtml = collectionSheetRows.map(r=>`
     <tr${r.exited?' style="opacity:0.6;"':''}>
-      <td>${r.no}</td><td>${r.exited ? `<span style="text-decoration:line-through;">${r.name}</span> <span class="tag due" style="font-size:10px;">${t('exited_tag')}</span>` : r.name}</td>
+      <td>${r.no}</td><td>${r.exited ? `<span style="text-decoration:line-through;">${esc(r.name)}</span> <span class="tag due" style="font-size:10px;">${t('exited_tag')}</span>` : r.name}</td>
       <td style="text-align:right">${r.exited ? t('na') : fmt(r.subA)}</td>
       <td style="text-align:right">${r.exited ? t('na') : (r.subA1>0 ? `<span style="color:var(--red);">${fmt(r.subA1)}</span>` : fmt(0))}</td>
       <td style="text-align:right">${r.hasLoan ? fmt(r.loanReceived) : t('na')}</td>
@@ -1364,13 +1383,13 @@ function renderSubs(){
     const eligible = state.members.filter(m => !m.exited && (!m.joinDate || m.joinDate.slice(0,7) <= month));
     const defaulters = eligible.filter(m => !paidMemberIds.has(m.id));
     const rows = paidThisMonth.slice().reverse().map(s => `
-      <tr><td>${memberName(s.memberId)}</td><td>${fmt(s.amount)}</td><td>${s.date}</td>
+      <tr><td>${escName(s.memberId)}</td><td>${fmt(s.amount)}</td><td>${esc(s.date)}</td>
       ${rw(`<td><button class="btn small secondary" onclick="deleteSub('${s.id}')">${t('delete')}</button></td>`)}</tr>`).join('');
 
     const loanPaysThisMonth = (state.loanPayments||[]).filter(p=>(p.date||'').slice(0,7)===month);
     const loanRows = loanPaysThisMonth.slice().reverse().map(p=>{
       const loan = state.loans.find(l=>l.id===p.loanId);
-      return `<tr><td>${loan?memberName(loan.memberId):t('na')}</td><td>${p.no}</td><td>${fmt(p.amount)}</td><td>${p.date}</td></tr>`;
+      return `<tr><td>${loan?memberName(loan.memberId):t('na')}</td><td>${p.no}</td><td>${fmt(p.amount)}</td><td>${esc(p.date)}</td></tr>`;
     }).join('');
 
     const loanEligible = state.loans.filter(l => (l.issueDate||'').slice(0,7) <= month && loanOutstanding(l) > 0);
@@ -1386,7 +1405,7 @@ function renderSubs(){
         </div>
         <div style="margin:6px 0 10px;">
           <span class="muted" style="font-weight:600;">${t('not_paid_title')}: </span>
-          ${defaulters.length ? defaulters.map(m=>`<span class="tag due" style="margin:2px 4px 2px 0;display:inline-block;">${m.name}</span>`).join('') : `<span class="tag paid">${t('all_paid_month')}</span>`}
+          ${defaulters.length ? defaulters.map(m=>`<span class="tag due" style="margin:2px 4px 2px 0;display:inline-block;">${esc(m.name)}</span>`).join('') : `<span class="tag paid">${t('all_paid_month')}</span>`}
         </div>
         <div class="muted" style="font-weight:600;">${t('loan_section_label')}</div>
         <div class="table-wrap">
@@ -1394,7 +1413,7 @@ function renderSubs(){
         </div>
         <div style="margin-top:6px;">
           <span class="muted" style="font-weight:600;">${t('loan_not_paid_title')}: </span>
-          ${loanDefaulters.length ? loanDefaulters.map(l=>`<span class="tag due" style="margin:2px 4px 2px 0;display:inline-block;">${memberName(l.memberId)}</span>`).join('') : `<span class="tag paid">${t('all_loans_paid_month')}</span>`}
+          ${loanDefaulters.length ? loanDefaulters.map(l=>`<span class="tag due" style="margin:2px 4px 2px 0;display:inline-block;">${escName(l.memberId)}</span>`).join('') : `<span class="tag paid">${t('all_loans_paid_month')}</span>`}
         </div>
       </div>
     `;
@@ -1438,7 +1457,7 @@ function renderSubs(){
   });
   memberSummarySnapshot = memberSummaryData;
   const memberSummaryRows = memberSummaryData.map(d => `<tr>
-      <td>${d.name}${d.exited?` <span class="tag due" style="font-size:10px;">${t('exited_tag')}</span>`:''}</td>
+      <td>${esc(d.name)}${d.exited?` <span class="tag due" style="font-size:10px;">${t('exited_tag')}</span>`:''}</td>
       <td style="text-align:right">${d.totalMonths}</td>
       <td style="text-align:right">${d.exited ? t('na') : fmt(d.subTotal)}</td>
       <td style="text-align:right">${d.outstandingSubCount}</td>
@@ -1640,7 +1659,7 @@ function renderLoans(){
     const nd = nextDueInstallment(l);
     const remaining = remainingInstallments(l);
     return `<tr>
-      <td>${no}</td><td>${memberName(l.memberId)}</td><td>${fmt(l.amount)}</td>
+      <td>${no}</td><td>${escName(l.memberId)}</td><td>${fmt(l.amount)}</td>
       <td><span class="badge-installments">${l.installments}</span></td>
       <td>${fmt(out)}${remaining>0 ? ` <span class="muted" style="font-size:11px;white-space:nowrap;">(${remaining} ${t('remaining_label')})</span>` : ''}</td>
       <td>${nd ? fmt(nd.total) : `<span class="tag paid">${t('all_paid')}</span>`}</td>
@@ -1695,7 +1714,7 @@ function renderLoans(){
         if(!suggestion) return `<p class="muted">${t('rotation_no_members')}</p>`;
         return `<div style="background:#F1E6CE;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
           <div class="muted" style="font-weight:600;">${t('rotation_suggestion_label')}</div>
-          <div style="font-family:'Noto Serif Tamil',serif;font-weight:700;color:var(--maroon);font-size:16px;margin:2px 0;">${suggestion.member.name}</div>
+          <div style="font-family:'Noto Serif Tamil',serif;font-weight:700;color:var(--maroon);font-size:16px;margin:2px 0;">${esc(suggestion.member.name)}</div>
           <div class="muted" style="font-size:12px;">${suggestion.reason==='never' ? t('rotation_never_had_loan') : t('rotation_longest_since')}</div>
           <button class="btn small gold" style="margin-top:6px;" onclick="selectSuggestedBorrower('${suggestion.member.id}')">${t('rotation_select_button')}</button>
         </div>`;
@@ -1779,7 +1798,7 @@ function buildScheduleHtml(loanId){
   html += `
     <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin-bottom:16px;">
       <tr><td style="padding:4px 6px;color:#5B4F41;">${t('loan_no')}</td><td style="padding:4px 6px;font-weight:700;">${loan.loanNumber || t('na')}</td></tr>
-      <tr><td style="padding:4px 6px;color:#5B4F41;">${t('borrower_name_label')}</td><td style="padding:4px 6px;font-weight:700;">${memberName(loan.memberId)}</td></tr>
+      <tr><td style="padding:4px 6px;color:#5B4F41;">${t('borrower_name_label')}</td><td style="padding:4px 6px;font-weight:700;">${escName(loan.memberId)}</td></tr>
       <tr><td style="padding:4px 6px;color:#5B4F41;">${t('loan_issue_month_label')}</td><td style="padding:4px 6px;font-weight:700;">${monthLabel((loan.issueDate||'').slice(0,7))}</td></tr>
       <tr><td style="padding:4px 6px;color:#5B4F41;">${t('loan_amount_label')}</td><td style="padding:4px 6px;font-weight:700;">${fmt(loan.amount)}</td></tr>
     </table>
@@ -1798,13 +1817,13 @@ async function exportSchedulePDF(loanId){
   const loan = state.loans.find(l=>l.id===loanId);
   if(!loan) return;
   const canvas = await captureNodeCanvas(buildScheduleHtml(loanId));
-  downloadCanvasPDF(canvas, `loan-schedule-${memberName(loan.memberId)}-${(loan.issueDate||'').slice(0,7)}`);
+  downloadCanvasPDF(canvas, `loan-schedule-${escName(loan.memberId)}-${(loan.issueDate||'').slice(0,7)}`);
 }
 async function exportScheduleJPEG(loanId){
   const loan = state.loans.find(l=>l.id===loanId);
   if(!loan) return;
   const canvas = await captureNodeCanvas(buildScheduleHtml(loanId));
-  downloadCanvasJPEG(canvas, `loan-schedule-${memberName(loan.memberId)}-${(loan.issueDate||'').slice(0,7)}`);
+  downloadCanvasJPEG(canvas, `loan-schedule-${escName(loan.memberId)}-${(loan.issueDate||'').slice(0,7)}`);
 }
 function editLoan(id){ editingLoanId = id; render(); window.scrollTo({top:0, behavior:'smooth'}); }
 function toggleFullyPaidLoans(){ showFullyPaidLoans = !showFullyPaidLoans; render(); }
@@ -1869,7 +1888,7 @@ function openSchedule(loanId){
   document.getElementById('scheduleModalHost').innerHTML = `
     <div style="position:fixed;inset:0;background:rgba(43,33,24,0.5);display:flex;align-items:flex-start;justify-content:center;padding:20px 10px;z-index:50;overflow-y:auto;" onclick="if(event.target===this) closeSchedule()">
       <div class="card" style="max-width:860px;width:100%;margin-top:10px;">
-        <h2>${t('schedule_title')} — ${memberName(loan.memberId)} (${t('loan_no')}: ${loan.loanNumber || t('na')})</h2>
+        <h2>${t('schedule_title')} — ${escName(loan.memberId)} (${t('loan_no')}: ${loan.loanNumber || t('na')})</h2>
         <p style="font-family:'Noto Serif Tamil',serif;font-weight:700;color:var(--maroon);margin:-6px 0 10px;">${t('loan_issue_month_label')}: ${monthLabel((loan.issueDate||'').slice(0,7))}</p>
         <div class="table-wrap schedule-mini">
         <table><thead><tr><th>${t('installment_no')}</th><th>${t('factor')}</th><th>${t('principal_part')}</th><th>${t('interest_part')}</th><th>${t('total')}</th><th>${t('status')}</th>${rw('<th></th>')}</tr></thead>
@@ -1916,7 +1935,7 @@ function recordLoanPayment(loanId, no, amount, date, opts){
   const loan = state.loans.find(l=>l.id===loanId);
   state.transactions.push({
     id:uid(), type:'income', category: opts.interestWaived ? t('foreclosure_txn_label') : t('loan_repayment'), amount, date,
-    note: `${memberName(loan.memberId)} — ${t('installment_no')} ${no}`,
+    note: `${escName(loan.memberId)} — ${t('installment_no')} ${no}`,
     auto:true, sourceType:'loan_payment', sourceId: payment.id
   });
 }
@@ -1998,7 +2017,7 @@ function renderLedger(){
     const monthIncome = monthTxns.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount),0);
     const monthExpense = monthTxns.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount),0);
     const rows = monthTxns.map(x => `
-      <tr><td><span class="tag ${x.type==='income'?'paid':'due'}">${t(x.type)}</span></td><td>${x.category}${x.auto?` <span class="badge-installments">${t('auto_tag')}</span>`:''}</td><td>${fmt(x.amount)}</td><td>${x.date}</td><td>${x.note||''}</td>
+      <tr><td><span class="tag ${x.type==='income'?'paid':'due'}">${t(x.type)}</span></td><td>${esc(x.category)}${x.auto?` <span class="badge-installments">${t('auto_tag')}</span>`:''}</td><td>${fmt(x.amount)}</td><td>${esc(x.date)}</td><td>${esc(x.note)}</td>
       ${rw(`<td>${x.auto?'':`<button class="btn small secondary" onclick="deleteTxn('${x.id}')">${t('delete')}</button>`}</td>`)}</tr>`).join('');
     return `
       <div style="margin-bottom:16px;">
@@ -2163,11 +2182,11 @@ function buildMemberStatementHtml(){
   if(!data) return '';
   const m = data.member;
   const orgName = (state.settings && state.settings.orgName) || '';
-  const subRows = data.subHistory.map(s=>`<tr><td style="${reportTdStyle()}">${s.month}</td><td style="${reportTdStyle('right')}">${fmt(s.amount)}</td><td style="${reportTdStyle()}">${s.date}</td></tr>`).join('');
-  const loanRows = data.memberLoans.map((l,i)=>`<tr><td style="${reportTdStyle()}">${i+1}</td><td style="${reportTdStyle('right')}">${fmt(l.amount)}</td><td style="${reportTdStyle('right')}">${l.rate}%</td><td style="${reportTdStyle('center')}">${l.installments}</td><td style="${reportTdStyle()}">${l.issueDate}</td><td style="${reportTdStyle('right')}">${fmt(loanOutstanding(l))}</td></tr>`).join('');
+  const subRows = data.subHistory.map(s=>`<tr><td style="${reportTdStyle()}">${esc(s.month)}</td><td style="${reportTdStyle('right')}">${fmt(s.amount)}</td><td style="${reportTdStyle()}">${esc(s.date)}</td></tr>`).join('');
+  const loanRows = data.memberLoans.map((l,i)=>`<tr><td style="${reportTdStyle()}">${i+1}</td><td style="${reportTdStyle('right')}">${fmt(l.amount)}</td><td style="${reportTdStyle('right')}">${l.rate}%</td><td style="${reportTdStyle('center')}">${l.installments}</td><td style="${reportTdStyle()}">${esc(l.issueDate)}</td><td style="${reportTdStyle('right')}">${fmt(loanOutstanding(l))}</td></tr>`).join('');
   const paymentRows = data.loanPaymentHistory.map(p=>{
     const loan = state.loans.find(l=>l.id===p.loanId);
-    return `<tr><td style="${reportTdStyle()}">${loan?(loan.loanNumber||data.memberLoans.indexOf(loan)+1):'-'}</td><td style="${reportTdStyle()}">${p.no}</td><td style="${reportTdStyle('right')}">${fmt(p.amount)}</td><td style="${reportTdStyle()}">${p.date}</td><td style="${reportTdStyle()}">${p.interestWaived?t('pay_without_interest'):''}</td></tr>`;
+    return `<tr><td style="${reportTdStyle()}">${loan?(loan.loanNumber||data.memberLoans.indexOf(loan)+1):'-'}</td><td style="${reportTdStyle()}">${p.no}</td><td style="${reportTdStyle('right')}">${fmt(p.amount)}</td><td style="${reportTdStyle()}">${esc(p.date)}</td><td style="${reportTdStyle()}">${p.interestWaived?t('pay_without_interest'):''}</td></tr>`;
   }).join('');
   let html = orgName ? reportHeaderHtml(orgName) : '';
   html += reportHeaderHtml(t('member_statement_title') + ' — ' + m.name);
@@ -2187,22 +2206,22 @@ function buildMemberStatementHtml(){
 }
 async function exportMemberStatementPDF(){
   const canvas = await captureNodeCanvas(buildMemberStatementHtml(), 800);
-  downloadCanvasPDF(canvas, `member-statement-${statementSnapshot.member.name}`);
+  downloadCanvasPDF(canvas, `member-statement-${esc(statementSnapshot.member.name)}`);
 }
 async function exportMemberStatementJPEG(){
   const canvas = await captureNodeCanvas(buildMemberStatementHtml(), 800);
-  downloadCanvasJPEG(canvas, `member-statement-${statementSnapshot.member.name}`);
+  downloadCanvasJPEG(canvas, `member-statement-${esc(statementSnapshot.member.name)}`);
 }
 function buildLoansListHtml(){
   const withBalanceRows = loansWithBalanceData.map((l,i)=>`
     <tr>
-      <td style="${reportTdStyle()}">${l.loanNumber||i+1}</td><td style="${reportTdStyle()}">${memberName(l.memberId)}</td>
+      <td style="${reportTdStyle()}">${l.loanNumber||i+1}</td><td style="${reportTdStyle()}">${escName(l.memberId)}</td>
       <td style="${reportTdStyle('right')}">${fmt(l.amount)}</td><td style="${reportTdStyle('center')}">${l.installments}</td>
       <td style="${reportTdStyle('right')}">${fmt(loanOutstanding(l))}</td><td style="${reportTdStyle('center')}">${monthLabel((l.issueDate||'').slice(0,7))}</td>
     </tr>`).join('');
   const fullyPaidRows = fullyPaidLoansData.map((l,i)=>`
     <tr>
-      <td style="${reportTdStyle()}">${l.loanNumber||i+1}</td><td style="${reportTdStyle()}">${memberName(l.memberId)}</td>
+      <td style="${reportTdStyle()}">${l.loanNumber||i+1}</td><td style="${reportTdStyle()}">${escName(l.memberId)}</td>
       <td style="${reportTdStyle('right')}">${fmt(l.amount)}</td><td style="${reportTdStyle('center')}">${l.installments}</td>
       <td style="${reportTdStyle('center')}">${monthLabel((l.issueDate||'').slice(0,7))}</td>
     </tr>`).join('');
@@ -2241,7 +2260,7 @@ function buildHistorySheetHtml(){
   const totalAll = historySheetData.reduce((s,d)=>s+d.total,0);
   const rows = historySheetData.map(d=>`
     <tr>
-      <td style="${reportTdStyle()}">${d.no}</td><td style="${reportTdStyle()}">${d.name}</td>
+      <td style="${reportTdStyle()}">${d.no}</td><td style="${reportTdStyle()}">${esc(d.name)}</td>
       <td style="${reportTdStyle('right')}">${fmt(d.subPaid)}</td>
       <td style="${reportTdStyle('right')}">${fmt(d.principalPaid)}</td>
       <td style="${reportTdStyle('right')}">${fmt(d.interestPaid)}</td>
@@ -2275,7 +2294,7 @@ function buildMemberSummaryHtml(){
   const currentMonth = new Date().toISOString().slice(0,7);
   const rows = memberSummarySnapshot.map(d=>`
     <tr>
-      <td style="${reportTdStyle()}">${d.name}${d.exited?` (${t('exited_tag')})`:''}</td>
+      <td style="${reportTdStyle()}">${esc(d.name)}${d.exited?` (${t('exited_tag')})`:''}</td>
       <td style="${reportTdStyle('right')}">${d.totalMonths}</td>
       <td style="${reportTdStyle('right')}">${d.exited ? t('na') : fmt(d.subTotal)}</td>
       <td style="${reportTdStyle('right')}">${d.outstandingSubCount}</td>
@@ -2331,7 +2350,7 @@ function buildCollectionSheetHtml(){
   const combinedTotal = Math.round((totalAll + prevMonthBalance)*100)/100;
   const rows = collectionSheetData.map(r=>`
     <tr>
-      <td style="${reportTdStyle()}">${r.no}</td><td style="${reportTdStyle()}">${r.exited?`(${t('exited_tag')}) `:''}${r.name}</td>
+      <td style="${reportTdStyle()}">${r.no}</td><td style="${reportTdStyle()}">${r.exited?`(${t('exited_tag')}) `:''}${esc(r.name)}</td>
       <td style="${reportTdStyle('right')}">${r.exited?t('na'):fmt(r.subA)}</td>
       <td style="${reportTdStyle('right')}">${r.exited?t('na'):fmt(r.subA1||0)}</td>
       <td style="${reportTdStyle('right')}">${r.hasLoan?fmt(r.loanReceived):t('na')}</td>
@@ -2390,7 +2409,7 @@ function buildFullLedgerHtml(){
     state.loans.map((l,i)=>[l.loanNumber||i+1, memberName(l.memberId), fmt(l.amount), l.rate, l.installments, fmt(loanOutstanding(l))]));
   state.loans.forEach((l,i)=>{
     const sched = buildSchedule(l);
-    html += simpleTableHtml(`Loan #${l.loanNumber||i+1} Schedule — ${memberName(l.memberId)}`,
+    html += simpleTableHtml(`Loan #${l.loanNumber||i+1} Schedule — ${escName(l.memberId)}`,
       [{label:'Installment'},{label:'Interest %',align:'right'},{label:'Principal',align:'right'},{label:'Interest',align:'right'},{label:'Total',align:'right'},{label:'Status',align:'center'}],
       sched.map(r=>[r.no, r.factor, fmt(r.principalPart), fmt(r.interestPart), fmt(r.total), isInstallmentPaid(l.id,r.no)?t('paid'):t('due')]));
   });
