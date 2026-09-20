@@ -93,12 +93,17 @@ const bad = (c, msg, status = 400) => c.json({ error: msg }, status);
 
 // Everything under /api/* requires an admin session EXCEPT:
 // - /api/admin/login|logout|session (the login flow itself)
-// - /api/state (the public, unauthenticated ledger app's read/save endpoint)
-// This is what makes the granular CRUD surface the "Super Admin, super
-// controls everything" panel while the ledger app keeps working unauthenticated.
-const PUBLIC_PATHS = new Set(['/api/state', '/api/admin/login', '/api/admin/logout', '/api/admin/session']);
+// - GET /api/state (the public home page reads the ledger to display it)
+//
+// Note GET, not all methods: the home page is display-only, so PUT /api/state
+// is admin-only like the rest of the write surface. Hiding the buttons in the
+// page is cosmetic — this check is what actually makes the data editable
+// only from the admin page.
+const PUBLIC_PATHS = new Set(['/api/admin/login', '/api/admin/logout', '/api/admin/session']);
 app.use('/api/*', async (c, next) => {
+  if (c.req.method === 'OPTIONS') return next();
   if (PUBLIC_PATHS.has(c.req.path)) return next();
+  if (c.req.path === '/api/state' && c.req.method === 'GET') return next();
   return requireAdmin()(c, next);
 });
 

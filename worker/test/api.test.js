@@ -32,8 +32,8 @@ async function loginAndGetCookie(password = TEST_PASSWORD) {
   return { res, cookie };
 }
 
-describe('public ledger endpoints (no auth required)', () => {
-  it('GET /api/state works without a session', async () => {
+describe('public home page access', () => {
+  it('GET /api/state works without a session (home page displays data)', async () => {
     const res = await SELF.fetch('https://test/api/state');
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -41,10 +41,25 @@ describe('public ledger endpoints (no auth required)', () => {
     expect(body).toHaveProperty('settings');
   });
 
-  it('PUT /api/state works without a session (ledger app self-save)', async () => {
+  it('PUT /api/state is REJECTED without a session (data is admin-only)', async () => {
     const res = await SELF.fetch('https://test/api/state', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Request': '1' },
+      body: JSON.stringify({ members: [{ id: 'sneaky', name: 'Should Not Save' }], subs: [], loans: [], loanPayments: [], transactions: [], cycles: [], settings: {} }),
+    });
+    expect(res.status).toBe(401);
+
+    // and nothing was written
+    const after = await SELF.fetch('https://test/api/state');
+    const body = await after.json();
+    expect(body.members.find(m => m.id === 'sneaky')).toBeUndefined();
+  });
+
+  it('PUT /api/state succeeds with an admin session', async () => {
+    const { cookie } = await loginAndGetCookie();
+    const res = await SELF.fetch('https://test/api/state', {
+      method: 'PUT',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json', 'X-Admin-Request': '1' },
       body: JSON.stringify({ members: [], subs: [], loans: [], loanPayments: [], transactions: [], cycles: [], settings: { orgName: 'x' } }),
     });
     expect(res.status).toBe(200);
